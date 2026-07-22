@@ -325,23 +325,27 @@ resolved_problems:
 
 ## Skill 目录设计
 
-```text
-monkeycode-issue-delivery/
-├── SKILL.md
-├── references/
-│   ├── state-machine.md
-│   ├── issue-template.md
-│   └── pr-report-template.md
-└── scripts/
-    └── inspect_delivery_state.sh
+两个 skill 的源码放在 MonkeyCode 仓库 `.monkeycode/skills/` 下并纳入版本控制，方便团队评审、版本追踪和跨环境安装。打包生成的 `.skill` 文件作为构建产物使用。
 
-quality-gate/
-├── SKILL.md
-├── references/
-│   └── result-schema.md
-└── scripts/
-    ├── detect_scope.sh
-    └── run_gate.sh
+```text
+.monkeycode/
+├── workflow.yaml
+└── skills/
+    ├── monkeycode-issue-delivery/
+    │   ├── SKILL.md
+    │   ├── references/
+    │   │   ├── state-machine.md
+    │   │   ├── issue-template.md
+    │   │   └── pr-report-template.md
+    │   └── scripts/
+    │       └── inspect_delivery_state.py
+    └── quality-gate/
+        ├── SKILL.md
+        ├── references/
+        │   └── result-schema.md
+        └── scripts/
+            ├── detect_scope.py
+            └── run_gate.py
 ```
 
 `SKILL.md` 保持核心流程和资源路由，详细状态、模板和结果 schema 放入一级 references。确定性探测和门禁执行由脚本完成。
