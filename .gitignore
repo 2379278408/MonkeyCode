@@ -12,6 +12,8 @@ monkeycode-ai/
 backend/bin/
 .pnpm-store/
 frontend/.vite/
+__pycache__/
+*.py[cod]
 
 # Electron (electron-builder)
 desktop/release/

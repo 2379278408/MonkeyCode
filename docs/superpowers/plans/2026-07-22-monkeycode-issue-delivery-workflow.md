@@ -274,7 +274,7 @@ preview:
 backend:
   root: backend
   targeted_test: go test
-  related_test: go test
+  related_test: go test ./...
   build: go build ./...
 ```
 
@@ -706,7 +706,7 @@ Run:
 python3 .monkeycode/skills/quality-gate/tests/test_run_gate.py -v
 ```
 
-Expected: 3 tests PASS.
+Expected: 4 tests PASS.
 
 - [ ] **Step 5: Verify a dry-run against MonkeyCode**
 
@@ -716,7 +716,7 @@ Run:
 python3 .monkeycode/skills/quality-gate/scripts/run_gate.py --repo . --config .monkeycode/workflow.yaml --scope frontend --target-test frontend/test/task-restart-dialog-keyboard.test.mjs --dry-run
 ```
 
-Expected: JSON status is `planned`; commands include Node test, ESLint, online build, and diff check; no command is executed.
+Expected: JSON status is `planned`; commands include Node test, online build, and diff check; ESLint is included when the detected Git range contains frontend source files; no command is executed.
 
 - [ ] **Step 6: Commit Task 3**
 

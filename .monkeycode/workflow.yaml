@@ -27,5 +27,5 @@ preview:
 backend:
   root: backend
   targeted_test: go test
-  related_test: go test
+  related_test: go test ./...
   build: go build ./...
