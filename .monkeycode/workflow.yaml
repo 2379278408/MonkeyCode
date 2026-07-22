@@ -1,0 +1,31 @@
+schema_version: 1
+base_branch: main
+language: zh-CN
+
+pull_request:
+  link_keyword: Fixes
+  require_manual_acceptance_for_ui: true
+
+common:
+  diff_check: git diff --check
+
+frontend:
+  root: frontend
+  package_manager: pnpm
+  targeted_test_ts: tsx --test
+  targeted_test_mjs: node --test
+  lint_changed: pnpm exec eslint
+  build_online: pnpm run build:online
+
+preview:
+  mode: online
+  target: https://monkeycode-ai.com
+  api_prefix: /api
+  allowed_dependency_roots:
+    - frontend/node_modules
+
+backend:
+  root: backend
+  targeted_test: go test
+  related_test: go test
+  build: go build ./...

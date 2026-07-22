@@ -135,7 +135,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_workflow_config.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_workflow_config.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'workflow_config'`.
@@ -283,7 +283,7 @@ backend:
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_workflow_config.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_workflow_config.py -v
 python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, ".monkeycode/skills/quality-gate/scripts"); from workflow_config import load_workflow; config = load_workflow(Path(".monkeycode/workflow.yaml")); assert config["base_branch"] == "main"'
 ```
 
@@ -349,7 +349,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_detect_scope.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_detect_scope.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'detect_scope'`.
@@ -430,7 +430,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_detect_scope.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_detect_scope.py -v
 python3 .monkeycode/skills/quality-gate/scripts/detect_scope.py --path frontend/src/App.tsx --path docs/change.md
 ```
 
@@ -525,7 +525,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_run_gate.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_run_gate.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'run_gate'`.
@@ -703,7 +703,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/quality-gate/tests/test_run_gate.py -v
+python3 .monkeycode/skills/quality-gate/tests/test_run_gate.py -v
 ```
 
 Expected: 3 tests PASS.
@@ -945,7 +945,7 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/monkeycode-issue-delivery/tests/test_inspect_delivery_state.py -v
+python3 .monkeycode/skills/monkeycode-issue-delivery/tests/test_inspect_delivery_state.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'inspect_delivery_state'`.
@@ -1087,7 +1087,7 @@ The state precedence in this implementation preserves the approved sequence: rev
 Run:
 
 ```bash
-python3 -m unittest .monkeycode/skills/monkeycode-issue-delivery/tests/test_inspect_delivery_state.py -v
+python3 .monkeycode/skills/monkeycode-issue-delivery/tests/test_inspect_delivery_state.py -v
 ```
 
 Expected: 10 tests PASS.
