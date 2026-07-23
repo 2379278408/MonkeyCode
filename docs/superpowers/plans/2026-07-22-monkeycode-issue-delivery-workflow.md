@@ -130,6 +130,8 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
+Extend this fixture to cover `design-approved`, `verified`, and credential redaction for HTTPS remote URLs so every state and safe remote reporting are exercised.
+
 - [ ] **Step 3: Run the test and verify the expected failure**
 
 Run:
@@ -1091,7 +1093,7 @@ Run:
 python3 .monkeycode/skills/monkeycode-issue-delivery/tests/test_inspect_delivery_state.py -v
 ```
 
-Expected: 10 tests PASS.
+Expected: 13 tests PASS.
 
 - [ ] **Step 6: Commit Task 5**
 
