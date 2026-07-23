@@ -670,13 +670,14 @@ def main() -> int:
     parser.add_argument("--scope", choices=("auto", "frontend", "backend", "mixed", "docs"), default="auto")
     parser.add_argument("--target-test", action="append", default=[])
     parser.add_argument("--backend-test", action="append", default=[])
+    parser.add_argument("--path", action="append", dest="paths")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
     config_path = args.config if args.config.is_absolute() else repo / args.config
     config = load_workflow(config_path)
-    paths = git_changed_paths(repo, args.base, args.head)
+    paths = args.paths if args.paths is not None else git_changed_paths(repo, args.base, args.head)
     detected = classify_paths(paths)
     scope = detected["scope"] if args.scope == "auto" else args.scope
     checks = build_check_plan(config, scope, paths, args.target_test, args.backend_test, repo)
