@@ -868,7 +868,8 @@ class InspectDeliveryStateTests(unittest.TestCase):
             "manual_acceptance": "pending",
             "review_verdict": "pending",
             "authorization_requested": False,
-            "git_authorized": False,
+            "required_actions": [],
+            "authorized_actions": [],
             "pr_url": None,
         }
         values.update(overrides)
@@ -926,7 +927,8 @@ class InspectDeliveryStateTests(unittest.TestCase):
 
     def test_authorized_delivery_is_ready_to_integrate(self):
         self.issue_branch()
-        result = inspect_state(self.accepted_args(review_verdict="ready", authorization_requested=True, git_authorized=True))
+        actions = ["commit", "push", "pr-create"]
+        result = inspect_state(self.accepted_args(review_verdict="ready", authorization_requested=True, required_actions=actions, authorized_actions=actions))
         self.assertEqual(result["state"], "ready-to-integrate")
 
     def test_pr_url_marks_delivery_opened(self):
@@ -1021,10 +1023,12 @@ def inspect_state(args: argparse.Namespace) -> dict[str, object]:
     accepted = args.manual_acceptance in {"passed", "not-required"}
     review_ready = args.review_verdict == "ready"
     has_implementation = bool(status) or ahead > 0
+    required_actions = set(args.required_actions)
+    authorized_actions = set(args.authorized_actions)
 
     if args.pr_url:
         state = "pr-opened"
-    elif args.git_authorized and review_ready and accepted and quality_status == "passed":
+    elif args.authorization_requested and required_actions and required_actions <= authorized_actions and review_ready and accepted and quality_status == "passed":
         state = "ready-to-integrate"
     elif args.authorization_requested and review_ready and accepted and quality_status == "passed":
         state = "ready-for-authorization"
@@ -1057,7 +1061,9 @@ def inspect_state(args: argparse.Namespace) -> dict[str, object]:
         "manual_acceptance": args.manual_acceptance,
         "review_verdict": args.review_verdict,
         "authorization_requested": args.authorization_requested,
-        "git_authorized": args.git_authorized,
+        "required_actions": sorted(required_actions),
+        "authorized_actions": sorted(authorized_actions),
+        "pending_actions": sorted(required_actions - authorized_actions),
         "remotes": _remotes(repo),
     }
 
@@ -1072,7 +1078,9 @@ def main() -> int:
     parser.add_argument("--manual-acceptance", choices=("pending", "passed", "not-required"), default="pending")
     parser.add_argument("--review-verdict", choices=("pending", "ready"), default="pending")
     parser.add_argument("--authorization-requested", action="store_true")
-    parser.add_argument("--git-authorized", action="store_true")
+    actions = ("issue-create", "commit", "push", "pr-create", "pr-edit")
+    parser.add_argument("--required-action", dest="required_actions", choices=actions, action="append", default=[])
+    parser.add_argument("--authorized-action", dest="authorized_actions", choices=actions, action="append", default=[])
     parser.add_argument("--pr-url")
     args = parser.parse_args()
     print(json.dumps(inspect_state(args), ensure_ascii=False, sort_keys=True))
@@ -1220,7 +1228,7 @@ Assert scope `frontend`, Node `.mjs` test selection, changed-file ESLint, online
 
 - [ ] **Step 2: Add a staged-approval replay fixture**
 
-Create a temporary feature branch with one commit. Feed a passing quality report, `manual_acceptance=passed`, and `review_verdict=ready` to the state inspector. Assert `ready-for-authorization`; set `git_authorized=True` and assert `ready-to-integrate`; add a PR URL and assert `pr-opened`.
+Create a temporary feature branch with one commit. Feed a passing quality report, `manual_acceptance=passed`, and `review_verdict=ready` to the state inspector. Assert `ready-for-authorization`; add matching required and authorized action sets and assert `ready-to-integrate`; add a PR URL and assert `pr-opened`.
 
 - [ ] **Step 3: Run all skill tests**
 

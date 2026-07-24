@@ -14,10 +14,11 @@ python3 .monkeycode/skills/monkeycode-issue-delivery/scripts/inspect_delivery_st
 | `--manual-acceptance VALUE` | `pending`, `passed`, or `not-required` |
 | `--review-verdict VALUE` | `pending` or `ready` |
 | `--authorization-requested` | Exact Git actions have been presented |
-| `--git-authorized` | User authorized the enumerated Git actions |
+| `--required-action ACTION` | Enumerated pending write: `issue-create`, `commit`, `push`, `pr-create`, or `pr-edit`; repeatable |
+| `--authorized-action ACTION` | One explicitly authorized write; repeatable |
 | `--pr-url URL` | Created and verified PR URL |
 
-Output fields are `state`, `branch`, `base_branch`, `clean`, `ahead`, `issue_url`, `pr_url`, `quality_status`, `manual_acceptance`, `review_verdict`, `authorization_requested`, `git_authorized`, and credential-redacted `remotes`.
+Output fields are `state`, `branch`, `base_branch`, `clean`, `ahead`, `issue_url`, `pr_url`, `quality_status`, `manual_acceptance`, `review_verdict`, `authorization_requested`, `required_actions`, `authorized_actions`, `pending_actions`, and credential-redacted push `remotes`.
 
 ## Reviewed
 
@@ -27,8 +28,8 @@ python3 .monkeycode/skills/monkeycode-issue-delivery/scripts/inspect_delivery_st
 
 ## Waiting for Authorization
 
-Add `--authorization-requested` after presenting exact Git actions. Expected state: `ready-for-authorization`.
+Add `--authorization-requested --required-action commit --required-action push --required-action pr-create` after presenting exact Git actions. Expected state: `ready-for-authorization`.
 
 ## Authorized
 
-Add `--authorization-requested --git-authorized` after explicit approval. Expected state: `ready-to-integrate`.
+Add matching `--authorized-action commit --authorized-action push --authorized-action pr-create` after explicit approval. Expected state: `ready-to-integrate`.

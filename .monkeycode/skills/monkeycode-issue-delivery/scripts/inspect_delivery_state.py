@@ -41,8 +41,27 @@ def _quality_status(path: Path | None) -> str:
         report = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return "invalid"
-    status = report.get("status")
-    return status if status in {"passed", "failed"} else "invalid"
+    if not isinstance(report, dict):
+        return "invalid"
+    required = {
+        "status": str,
+        "scope": str,
+        "paths": list,
+        "checks": list,
+        "blockers": list,
+        "evidence": dict,
+    }
+    if any(not isinstance(report.get(key), expected) for key, expected in required.items()):
+        return "invalid"
+    status = report["status"]
+    if status not in {"passed", "failed"}:
+        return "invalid"
+    if status == "passed":
+        if report["blockers"]:
+            return "invalid"
+        if any(not isinstance(check, dict) or check.get("exit_code") != 0 for check in report["checks"]):
+            return "invalid"
+    return status
 
 
 def _redact_remote_url(url: str) -> str:
@@ -60,9 +79,26 @@ def _remotes(repo: Path) -> dict[str, str]:
     remotes: dict[str, str] = {}
     for line in lines:
         fields = line.split()
-        if len(fields) >= 3 and fields[2] == "(fetch)":
+        if len(fields) >= 3 and fields[2] == "(push)":
             remotes[fields[0]] = _redact_remote_url(fields[1])
     return remotes
+
+
+def _valid_pr_url(url: str | None) -> bool:
+    if not url:
+        return False
+    parsed = urlsplit(url)
+    parts = [part for part in parsed.path.split("/") if part]
+    return parsed.scheme == "https" and parsed.hostname == "github.com" and len(parts) == 4 and parts[2] == "pull" and parts[3].isdigit()
+
+
+def _has_implementation(repo: Path, status: str, ahead: int, quality_report: Path | None) -> bool:
+    ignored = quality_report.resolve() if quality_report is not None else None
+    for line in status.splitlines():
+        changed = line[3:].split(" -> ")[-1]
+        if ignored is None or (repo / changed).resolve() != ignored:
+            return True
+    return ahead > 0
 
 
 def inspect_state(args: argparse.Namespace) -> dict[str, object]:
@@ -74,27 +110,45 @@ def inspect_state(args: argparse.Namespace) -> dict[str, object]:
     quality_status = _quality_status(args.quality_report)
     accepted = args.manual_acceptance in {"passed", "not-required"}
     review_ready = args.review_verdict == "ready"
-    has_implementation = bool(status) or ahead > 0
+    has_implementation = _has_implementation(repo, status, ahead, args.quality_report)
+    required_actions = set(args.required_actions)
+    authorized_actions = set(args.authorized_actions)
+    actions_authorized = bool(required_actions) and required_actions <= authorized_actions
+    issue_ready = bool(args.issue_url)
+    workspace_ready = issue_ready and branch != args.base_branch
+    design_ready = workspace_ready and args.design_approved
+    implementation_ready = design_ready and has_implementation
+    verified_ready = implementation_ready and quality_status == "passed"
+    accepted_ready = verified_ready and accepted
+    reviewed_ready = accepted_ready and review_ready
+    authorization_ready = reviewed_ready and args.authorization_requested and bool(required_actions)
+    integration_ready = authorization_ready and actions_authorized
+    pr_ready = integration_ready and "pr-create" in authorized_actions and _valid_pr_url(args.pr_url)
+    blockers: list[str] = []
+    if args.pr_url and not pr_ready:
+        blockers.append("pr-url requires the complete authorized delivery chain")
+    if quality_status == "passed" and not implementation_ready:
+        blockers.append("quality report requires issue, workspace, design, and implementation evidence")
 
-    if args.pr_url:
+    if pr_ready:
         state = "pr-opened"
-    elif args.git_authorized and review_ready and accepted and quality_status == "passed":
+    elif integration_ready:
         state = "ready-to-integrate"
-    elif args.authorization_requested and review_ready and accepted and quality_status == "passed":
+    elif authorization_ready:
         state = "ready-for-authorization"
-    elif review_ready and accepted and quality_status == "passed":
+    elif reviewed_ready:
         state = "reviewed"
-    elif accepted and quality_status == "passed":
+    elif accepted_ready:
         state = "preview-accepted"
-    elif quality_status == "passed":
+    elif verified_ready:
         state = "verified"
-    elif args.design_approved and has_implementation:
+    elif implementation_ready:
         state = "implemented"
-    elif args.design_approved:
+    elif design_ready:
         state = "design-approved"
-    elif args.issue_url and branch != args.base_branch:
+    elif workspace_ready:
         state = "workspace-ready"
-    elif args.issue_url:
+    elif issue_ready:
         state = "issue-ready"
     else:
         state = "intake-ready"
@@ -111,7 +165,10 @@ def inspect_state(args: argparse.Namespace) -> dict[str, object]:
         "manual_acceptance": args.manual_acceptance,
         "review_verdict": args.review_verdict,
         "authorization_requested": args.authorization_requested,
-        "git_authorized": args.git_authorized,
+        "required_actions": sorted(required_actions),
+        "authorized_actions": sorted(authorized_actions),
+        "pending_actions": sorted(required_actions - authorized_actions),
+        "blockers": blockers,
         "remotes": _remotes(repo),
     }
 
@@ -130,7 +187,9 @@ def main() -> int:
     )
     parser.add_argument("--review-verdict", choices=("pending", "ready"), default="pending")
     parser.add_argument("--authorization-requested", action="store_true")
-    parser.add_argument("--git-authorized", action="store_true")
+    actions = ("issue-create", "commit", "push", "pr-create", "pr-edit")
+    parser.add_argument("--required-action", dest="required_actions", choices=actions, action="append", default=[])
+    parser.add_argument("--authorized-action", dest="authorized_actions", choices=actions, action="append", default=[])
     parser.add_argument("--pr-url")
     args = parser.parse_args()
     print(json.dumps(inspect_state(args), ensure_ascii=False, sort_keys=True))

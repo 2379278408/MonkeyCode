@@ -8,10 +8,11 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from detect_scope import changed_paths as git_changed_paths
 from detect_scope import classify_paths
-from workflow_config import load_workflow, require_string
+from workflow_config import WorkflowConfigError, load_workflow, require_string
 
 
 @dataclass(frozen=True)
@@ -21,28 +22,64 @@ class Check:
     cwd: Path
 
 
+class GatePlanError(ValueError):
+    pass
+
+
 def redact(text: str) -> str:
     patterns = (
         r"(?i)(token\s*[=:]\s*)\S+",
         r"(?i)(password\s*[=:]\s*)\S+",
         r"(?i)(secret\s*[=:]\s*)\S+",
         r"(?i)(api[_-]?key\s*[=:]\s*)\S+",
-        r"(?i)(authorization\s*:\s*(?:bearer\s+)?)\S+",
+        r"(?i)(authorization\s*[=:]\s*(?:bearer\s+)?)\S+",
     )
     for pattern in patterns:
         text = re.sub(pattern, r"\1[REDACTED]", text)
     return text[-4000:]
 
 
+def _redact_url(value: str) -> str:
+    parsed = urlsplit(value)
+    if not parsed.scheme or parsed.hostname is None or parsed.username is None:
+        return value
+    host = parsed.hostname
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+
+
+def redact_command(argv: list[str]) -> list[str]:
+    sensitive_flags = {"--token", "--password", "--secret", "--api-key", "--api_key", "--authorization"}
+    result: list[str] = []
+    redact_next = False
+    for argument in argv:
+        if redact_next:
+            result.append("[REDACTED]")
+            redact_next = False
+            continue
+        result.append(redact(_redact_url(argument)))
+        if argument.lower() in sensitive_flags:
+            redact_next = True
+    return result
+
+
 def _argv(config: dict[str, object], key: str) -> list[str]:
     return shlex.split(require_string(config, key))
 
 
-def _relative(path: str, root: str) -> str:
-    try:
-        return str(Path(path).relative_to(root))
-    except ValueError as error:
-        raise ValueError(f"path must be inside {root}: {path}") from error
+def _configured_root(repo: Path, root: str) -> Path:
+    candidate = (repo / root).resolve()
+    if not candidate.is_relative_to(repo):
+        raise GatePlanError(f"configured root must be inside repository: {root}")
+    return candidate
+
+
+def _relative(path: str, repo: Path, root: Path) -> str:
+    candidate = (repo / path).resolve()
+    if not candidate.is_relative_to(root):
+        raise GatePlanError(f"path must be inside {root.relative_to(repo)}: {path}")
+    return str(candidate.relative_to(root))
 
 
 def build_check_plan(
@@ -58,15 +95,17 @@ def build_check_plan(
 
     if scope in {"frontend", "mixed"}:
         frontend_root = require_string(config, "frontend.root")
-        frontend_cwd = repo / frontend_root
+        frontend_cwd = _configured_root(repo, frontend_root)
+        if not target_tests:
+            raise GatePlanError("frontend scope requires at least one targeted test")
         for target in target_tests:
-            relative_target = _relative(target, frontend_root)
+            relative_target = _relative(target, repo, frontend_cwd)
             if target.endswith(".mjs"):
                 runner_key = "frontend.targeted_test_mjs"
             elif target.endswith(".ts"):
                 runner_key = "frontend.targeted_test_ts"
             else:
-                raise ValueError(f"unsupported frontend test extension: {target}")
+                raise GatePlanError(f"unsupported frontend test extension: {target}")
             checks.append(
                 Check(
                     f"frontend-test:{relative_target}",
@@ -76,7 +115,7 @@ def build_check_plan(
             )
 
         lint_paths = [
-            _relative(path, frontend_root)
+            _relative(path, repo, frontend_cwd)
             for path in changed_paths
             if path.startswith(f"{frontend_root}/")
             and Path(path).suffix in {".ts", ".tsx", ".js", ".jsx", ".mjs"}
@@ -95,11 +134,13 @@ def build_check_plan(
 
     if scope in {"backend", "mixed"}:
         backend_root = require_string(config, "backend.root")
-        backend_cwd = repo / backend_root
-        for selector in backend_tests:
+        backend_cwd = _configured_root(repo, backend_root)
+        if not backend_tests:
+            raise GatePlanError("backend scope requires at least one targeted test selector")
+        for index, selector in enumerate(backend_tests, start=1):
             checks.append(
                 Check(
-                    f"backend-test:{selector}",
+                    f"backend-test:{index}",
                     _argv(config, "backend.targeted_test") + shlex.split(selector),
                     backend_cwd,
                 )
@@ -148,7 +189,7 @@ def run_checks(checks: list[Check]) -> dict[str, object]:
         results.append(
             {
                 "name": check.name,
-                "command": check.argv,
+                "command": redact_command(check.argv),
                 "cwd": str(check.cwd),
                 "exit_code": exit_code,
                 "duration_ms": duration_ms,
@@ -166,7 +207,7 @@ def _planned(checks: list[Check]) -> dict[str, object]:
     return {
         "status": "planned",
         "checks": [
-            {"name": check.name, "command": check.argv, "cwd": str(check.cwd)}
+            {"name": check.name, "command": redact_command(check.argv), "cwd": str(check.cwd)}
             for check in checks
         ],
     }
@@ -190,13 +231,32 @@ def main() -> int:
     args = parser.parse_args()
 
     repo = args.repo.resolve()
-    config_path = args.config if args.config.is_absolute() else repo / args.config
-    config = load_workflow(config_path)
-    paths = args.paths if args.paths is not None else git_changed_paths(repo, args.base, args.head)
-    detected = classify_paths(paths)
-    scope = detected["scope"] if args.scope == "auto" else args.scope
-    checks = build_check_plan(config, scope, paths, args.target_test, args.backend_test, repo)
-    report = _planned(checks) if args.dry_run else run_checks(checks)
+    scope = args.scope
+    paths: list[str] = []
+    try:
+        config_path = args.config if args.config.is_absolute() else repo / args.config
+        config = load_workflow(config_path)
+        paths = args.paths if args.paths is not None else git_changed_paths(repo, args.base, args.head)
+        detected = classify_paths(paths)
+        scope = detected["scope"] if args.scope == "auto" else args.scope
+        checks = build_check_plan(config, scope, paths, args.target_test, args.backend_test, repo)
+        report = _planned(checks) if args.dry_run else run_checks(checks)
+    except (WorkflowConfigError, ValueError, subprocess.CalledProcessError, OSError) as error:
+        report = {
+            "status": "failed",
+            "scope": scope,
+            "paths": paths,
+            "checks": [],
+            "blockers": ["quality gate setup failed"],
+            "evidence": {"completed_checks": [], "failed_checks": []},
+            "error": {
+                "category": type(error).__name__,
+                "message": redact(str(error)),
+                "recovery": "fix the reported configuration, path, or Git input and rerun dry-run",
+            },
+        }
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+        return 2
     failed_checks = [
         item["name"] for item in report["checks"] if item.get("exit_code", 0) != 0
     ]

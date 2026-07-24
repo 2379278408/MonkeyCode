@@ -16,7 +16,7 @@
 | `ready-to-integrate` | Explicit Git authorization | Execute authorized actions | Granted for enumerated actions |
 | `pr-opened` | Verified PR URL and metadata | Final report | PR edits require fresh approval |
 
-`--authorization-requested` distinguishes `reviewed` from `ready-for-authorization`. `--git-authorized` advances reviewed and accepted work to `ready-to-integrate`.
+`--authorization-requested` distinguishes `reviewed` from `ready-for-authorization`. `ready-to-integrate` requires every `--required-action` to have a matching `--authorized-action`.
 
 ## Delivery Routes
 

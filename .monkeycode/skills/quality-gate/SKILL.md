@@ -30,7 +30,7 @@ Use `references/cli.md` for arguments and examples.
 | mixed | Frontend and backend checks, one final diff check |
 | docs | Diff check |
 
-Explicit targeted tests remain the caller's responsibility. An empty targeted-test list means the plan contains no targeted test command.
+Explicit targeted tests remain the caller's responsibility. Frontend, backend, and mixed scopes fail planning when their required targeted tests are absent.
 
 ## Failure Handling
 

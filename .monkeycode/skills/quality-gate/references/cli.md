@@ -38,3 +38,5 @@ python3 .monkeycode/skills/quality-gate/scripts/run_gate.py --repo . --scope fro
 | `--dry-run` | Print the plan without executing checks |
 
 Checks use configured working directories and argument arrays. Execution stops at the first failure. Exit code `0` means planned or passed; exit code `1` means failed.
+
+Setup failures such as missing targeted tests, invalid roots, paths outside configured roots, bad Git refs, and invalid configuration return structured JSON with exit code `2`.
